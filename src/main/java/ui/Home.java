@@ -1,9 +1,7 @@
 //TODO
 /*
-    -> fare una lista di passive e far scegliere
-    -> gestire colori e attivazioni attraverso il log delle skills
-    -> sistemare situazione Domain
-    ->
+    -> evasione, critico, effetti visivi ( check + o meno se statistiche aumentate)
+    -> aggiungere più tipologie di skills
  */
 
 
@@ -13,6 +11,8 @@ import logic.*;
 import logic.entita.Entita;
 import logic.entita.MaxValues;
 import logic.entita.UpgradePoints;
+import logic.enums.PassiveEffect;
+import logic.enums.TypeOfSkill;
 import logic.skills.*;
 import logic.livelli.Level;
 import logic.livelli.Round;
@@ -30,9 +30,9 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static logic.ReturnValues.*;
-import static logic.skills.PassiveEffect.*;
-import static logic.skills.Target.*;
+import static logic.enums.ReturnValues.*;
+import static logic.enums.PassiveEffect.*;
+import static logic.enums.Target.*;
 import static ui.UIUtils.*;
 
 /**
@@ -83,24 +83,16 @@ public class Home extends JFrame {
             frame.setVisible(true);
         });
     }
-
+    //  LIVELLI  <- INIZIO -> STATS -> PASSIVA -> CREAPASSIVA/SKILL -> DOMAIN -> CREA DOMAIN -> NUOVO PG
     /**
      * Creates and returns the initial game panel
      */
-    public JPanel inizio() throws IOException {
+    public Pagina inizio() throws IOException {
         JPanel panel = new JPanel();
-        panel.add(creaLabel("BENVENUTO", 0, 0, 100, 10, 30, Color.black));
         panel.setLayout(null);
         panel.setBackground(Color.lightGray);
 
-        panelContainer.add(sceltaLvl(), "selezione");
-
-        JButton avvio = creabottone("avvia", 1, 20, 10, 10, 20);
-        avvio.addActionListener(_ -> cardLayout.show(panelContainer, "selezione"));
-        panel.add(avvio);
-
         // Load saved game state
-        System.out.println(eroe);
         File file = new File("save.json");
         if (!file.exists() || GameSaveUtil.caricaDaFile("save.json").getPersonaggio() == null) {
             GameSave save = new GameSave(prePg(), List.of(0));
@@ -111,18 +103,6 @@ public class Home extends JFrame {
         eroe = save.getPersonaggio();
         if(eroe.getDomain() != null && !eroe.getDomain_acquisiti().contains(eroe.getDomain()))
             eroe.getDomain_acquisiti().add(eroe.getDomain());
-
-
-        //PARTE GRAFICA DELL'INIZIO
-        salva(panel);
-        stats(panel, save.getPersonaggio());
-        mostraDomain(panel, eroe);
-        creaEroe(panel);
-        creaDomain(panel);
-        sceltaDomain(panel);
-        creaSkill(panel);
-        mostraSkills(panel, save.getPersonaggio());
-        puntiLivelli(panel, save.getPersonaggio());
 
         panel.revalidate();
         panel.repaint();
@@ -136,26 +116,58 @@ public class Home extends JFrame {
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED
         );
         scrollPane.setPreferredSize(new Dimension(400, 200));
-        panel.add(scrollPane, BorderLayout.CENTER);
+        //panel.add(scrollPane, BorderLayout.CENTER);
 
-        return panel;
+        var btnSin = new JButton("< Livelli");
+        btnSin.addActionListener(_ -> {
+            panelContainer.add(sceltaLvl(), "livelli");
+            cardLayout.show(panelContainer, "livelli");
+        });
+        var btnDs = new JButton("Stats >");
+        btnDs.addActionListener(_ -> {
+            panelContainer.add(statsPagina(eroe), "stats");
+            cardLayout.show(panelContainer, "stats");
+        });
+
+        panel.add(creaLabel(
+                "A SINISTRA si trovano i livelli",
+                33, 20, 20, 10, 18, null
+        ));
+        panel.add(creaLabel(
+                "<html>A DESTRA si trovano rispettivamente: <br>   Statistiche > <br>  Passiva >> <br> Creazione Skill/Passiva >>> <br> Dominio >>>> <br> Creazione Dominio>>>>> <br> Nuovo Personaggio</html>",
+                23, 40, 45, 30, 18, null
+        ));
+
+        return new Pagina("Benvenuto", panel, btnSin, btnDs, null);
     }
 
-    //PANNELLI PER INFORMAZIONI O CREAZIONE
-
+    //PAGINE-PAGES
     /**
      * Creates a new domain customization panel where users can configure and save their domain properties.
      * The customizable properties include domain name, damage, activation probability, duration, cooldown,
      * and three passive effects. This method adds the panel to the provided container.
      *
-     * @param pannello the JPanel to which the domain customization panel will be added
+
      */
-    public void creaDomain(JPanel pannello){
+    public Pagina creaDomain(){
+        var btnSin = new JButton("< Domain");
+        btnSin.addActionListener(_ -> {
+            panelContainer.add(mostraDomainPagina(eroe), "Domain");
+            cardLayout.show(panelContainer, "Domain");
+        });
+        var btnDs = new JButton("Resetta/crea salvataggio >");
+        btnDs.addActionListener(_ -> {
+            panelContainer.add(creaEroe(), "creaEroe");
+            cardLayout.show(panelContainer, "creaEroe");
+        });
+
+        if(eroe.getDomain() == null && Objects.equals(eroe.getNome(), "crea un nuovo account"))
+            return new Pagina("CREA UN NUOVO PERSONAGGIO", new JPanel(), btnSin, btnDs, null);
         if(eroe.getLvl() < 10)
-            return;
+            return new Pagina("Raggiungi Livello 10 e vedrai", new JPanel(), btnSin, btnDs, null);;
         AtomicInteger punti = new AtomicInteger(70);
         //per comboBox
-        Integer[] probabilita = {10, 20, 30, 40, 50, 60, 70};
+        Integer[] probabilita = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 
         JComboBox<Integer> comboBox = new JComboBox<>(probabilita);
 
@@ -170,7 +182,7 @@ public class Home extends JFrame {
         );
         //slider per il danno
         // Crea uno slider che va da 0 a 300, valore iniziale 100
-        JSlider sliderDanno = new JSlider(0, 300, 0);
+        JSlider sliderDanno = new JSlider(1, 300, 1);
         // Mostra i valori min/max e le tacche
         sliderDanno.setMajorTickSpacing(50); // tacche grandi ogni 25
         sliderDanno.setMinorTickSpacing(10);  // tacche piccole ogni 5
@@ -178,14 +190,14 @@ public class Home extends JFrame {
         sliderDanno.setPaintLabels(true);    // mostra numeri
 
         //slider per la durata
-        JSlider sliderDurata = new JSlider(0, 10, 0);
+        JSlider sliderDurata = new JSlider(1, 10, 1);
         // Mostra i valori min/max e le tacche
         sliderDurata.setMajorTickSpacing(1); // tacche grandi ogni 25
         sliderDurata.setPaintTicks(true);     // mostra tacche
         sliderDurata.setPaintLabels(true);    // mostra numeri
 
         //slider per la durata
-        JSlider sliderCooldown = new JSlider(0, 10, 0);
+        JSlider sliderCooldown = new JSlider(3, 10, 3);
         // Mostra i valori min/max e le tacche
         sliderCooldown.setMajorTickSpacing(1); // tacche grandi ogni 25
         sliderCooldown.setPaintTicks(true);     // mostra tacche
@@ -247,9 +259,7 @@ public class Home extends JFrame {
             nuovoTot = parsePuntiEffetti(nuovoTot, (PassiveEffect) effectCombo1.getSelectedItem());
             nuovoTot = parsePuntiEffetti(nuovoTot, (PassiveEffect) effectCombo2.getSelectedItem());
 
-            System.out.println(punti);
             punti.set(nuovoTot);
-            System.out.println(punti);
             labelPunti.setText("Punti rimanenti: " + punti.get() + " / 70");
         };
         //bottone per salvare
@@ -261,7 +271,7 @@ public class Home extends JFrame {
                 mostraErrore("ciccione", "errore: non abbastanza punti, sei un ciccione");
                 cardLayout.show(panelContainer, "inizio");
             } else {
-                areaNome.setText("");
+
                 Domain domainNuovo = new Domain(
                         areaNome.getText(),
                         sliderDanno.getValue(),
@@ -269,7 +279,7 @@ public class Home extends JFrame {
                         sliderCooldown.getValue(),
                         sliderDurata.getValue(),
                         sliderDurata.getValue(),
-                        comboBox.getSelectedIndex(),
+                        comboBox.getSelectedItem() == null ? 10 : (Integer) comboBox.getSelectedItem(),
                         false,
                         AOE,        //type of target
                         List.of(    //Passive effects
@@ -279,17 +289,18 @@ public class Home extends JFrame {
                         ),
                         0
                 );
-
+                areaNome.setText("");
                 if(eroe.getDomain() != null && !eroe.getDomain_acquisiti().contains(eroe.getDomain())) {
                     eroe.getDomain_acquisiti().add(eroe.getDomain());
                     try {
-                        inizio();
+                        GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                        panelContainer.add(inizio(), "inizio");
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
                 }
                 eroe.getDomain_acquisiti().add(domainNuovo);
-                cardLayout.show(panelContainer, "inizio");
+                cardLayout.show(panelContainer, "Domain");
             }
         });
         creaDomain.add(creaDomainSalva);
@@ -305,422 +316,69 @@ public class Home extends JFrame {
         effectCombo2.addActionListener(_ -> aggiornaPunti.run());
 
 
+        JPanel pannelloFinale = new JPanel(new GridLayout(1, 2));
+        pannelloFinale.add(creaDomain);
+        pannelloFinale.add(sceltaDomain());
 
-
-        pannello.add(creaDomain);
+        return new Pagina("Crea Domain", pannelloFinale, btnSin, btnDs, null);
     }
-
-    /**
-     * Adjusts the given points according to the specified passive effect.
-     * Reduces or increases the points based on the effect type.
-     * Throws an IllegalStateException for unknown effects.
-     *
-     * @param punti The initial points to be modified.
-     * @param passiveEffect The passive effect that influences the adjustment.
-     * @return The adjusted point value after applying the effect.
-     */
-    public int parsePuntiEffetti(int punti, PassiveEffect passiveEffect){
-        switch (passiveEffect) {
-            case POISON -> punti -= 10;
-            case BLEEDING -> punti -= 13;
-            case BURNING -> punti -= 15;
-            case DEF_DEBUFF -> punti -= 25;
-            case ATK_DEBUFF -> punti -= 20;
-            case OVERALL_DEBUFF -> punti -= 35;
-            case NOEFFECT -> punti += 1;
-
-            case null -> System.out.println("nullo in creaDomain");
-            default -> throw new IllegalStateException("Unexpected value: " + passiveEffect);
-        }
-        System.out.println(punti + "dopo");
-        return punti;
-    }
-    /**
-     * Creates a panel showing entity stats and skills
-     */
-    public void stats(JPanel pannello, Entita entita) {
-        if(entita == null)
-            return;
-        JPanel stats = new JPanel();
-        stats.setBounds(UIUtils.getX(70), UIUtils.getY(10), UIUtils.getX(15), UIUtils.getY(20));
-        stats.setLayout(new GridLayout(10, 1));
-        stats.setBackground(Color.white);
-
-        entita.levelUp();
-
-        // Create health bar with color coding
-        var barraHp = creaProgressBar(0, (int) entita.getMaxValues().getMaxHp(), (int) entita.getHp());
-        if (barraHp.getValue() < (barraHp.getMaximum() - barraHp.getMinimum()) / 2)
-            barraHp.setBackground(Color.red);
-        else if (barraHp.getValue() < (barraHp.getMaximum() / 100 * 70))
-            barraHp.setBackground(Color.orange);
-        else
-            barraHp.setBackground(Color.green);
-
-        // Add stat labels
-        stats.add(new JLabel("Nome: " + entita.getNome()));
-        stats.add(new JLabel("Livello: " + entita.getLvl()));
-        stats.add(new JLabel("Hp: " + entita.getHp() + "/" + entita.getMaxValues().getMaxHp()));
-        stats.add(barraHp);
-        stats.add(new JLabel("Exp: " + entita.getXp()));
-        stats.add(new JLabel("Def: " + entita.getDef()));
-        stats.add(new JLabel("Attacco: " + entita.getAtk()));
-        stats.add(new JLabel("Attacco Speciale: " + entita.getSpecialAtk().getNomeAttacco()));
-        stats.add(new JLabel("Danno Speciale: " + entita.getSpecialAtk().getDanno()));
-
-        pannello.add(stats);
-    }
-
-    /**
-     * Creates a panel with domain-related information and a dropdown for selecting passive effects.
-     * Adds the created panel to the provided parent panel.
-     *
-     * @param pannello The parent JPanel to which the domain selection panel will be added.
-     */
-    public void sceltaDomain(JPanel pannello) {
-
-        System.out.println(eroe == null);
-        if(eroe == null || eroe.getDomain() == null) {
-            return;
-        }
-        if(eroe.getDomain_acquisiti() == null)
-            eroe.setDomain_acquisiti(List.of(eroe.getDomain()));
-        System.out.println("ciao");
-
-        JPanel stats = new JPanel();
-        stats.setBounds(UIUtils.getX(86), UIUtils.getY(10), UIUtils.getX(13), UIUtils.getY(15));
-        stats.setLayout(new GridLayout(3, 2));
-        stats.setBackground(Color.white);
-
-        JComboBox<Domain> domains = new JComboBox<>(
-                eroe.getDomain_acquisiti().toArray(new Domain[0])
-        );
-
-        // Nel pannello:
-        stats.add(new JLabel("Domini in possesso: "));
-        stats.add(domains);
-
-        JButton salvaDomain = creabottone("scegli", 0, 0, 0, 0, 14);
-
-        salvaDomain.addActionListener(_ -> {
-            Domain selezionato = (Domain) domains.getSelectedItem();
-            eroe.setDomain(selezionato);
-            cardLayout.show(panelContainer, "inizio");
-        });
-
-        stats.add(salvaDomain);
-
-
-
-        pannello.add(stats);
-    }
-
-    public void creaSkill(JPanel pannello) {
-        var panel = new JPanel(new GridLayout(5,1));
-        JTextField skill = new JTextField();
-        panel.setBounds(UIUtils.getX(45), UIUtils.getY(70), UIUtils.getX(24), UIUtils.getY(15));
-        skill.setBounds(UIUtils.getX(45), UIUtils.getY(70), UIUtils.getX(24), UIUtils.getY(15));
-
-        JComboBox<TypeOfSkill> tipi = new JComboBox<>(TypeOfSkill.values());
-
-        JButton crea = creabottone("Crea Skill", UIUtils.getX(45), UIUtils.getY(80), UIUtils.getX(24), UIUtils.getY(5), 14);
-        crea.addActionListener(_ -> {
-            if (skill.getText().isEmpty()) {
-                mostraErrore("Skill vuoto", "Inserisci un nome per il nuovo skill");
-                return;
-            }
-            String effect = skill.getText();
-            Skill nuovaSkill = new Skill(
-                    effect,
-                    false,
-                    (TypeOfSkill) tipi.getSelectedItem()
-            );
-            eroe.getPassiva().getSkills().add(nuovaSkill);
+    public Pagina statsPagina(Entita entita) {
+        var btnSin = new JButton("< Inizio");
+        btnSin.addActionListener(_ -> {
             try {
-                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(inizio(), "home");
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            pannello.revalidate();
-            pannello.repaint();
-            try {
-                inizio();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            cardLayout.show(panelContainer, "home");
         });
-        var cancella = new JButton("Cancella passiva");
-        cancella.addActionListener(_ -> {
-            if (eroe.getPassiva().getSkills().isEmpty()) {
-                mostraErrore("Nessun skill disponibile", "Non ci sono skill da cancellare");
-                return;
-            }
-            if(sceltaYN("ARE YOU SURE?", "Vuoi cancellare la passiva?") == 0){
-                eroe.getPassiva().getSkills().clear();
-                try {
-                    GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
+        var btnDs = new JButton("Passiva >");
+        btnDs.addActionListener(_ -> {
+            panelContainer.add(mostraSkillsPagina(entita), "passiva");
+            cardLayout.show(panelContainer, "passiva");
         });
-        panel.add(skill);
-        panel.add(cancella);
-        panel.add(tipi);
-        panel.add(crea);
-        pannello.add(panel);
+        JPanel pannello = new JPanel(new GridLayout(1, 2));
+        pannello.add(stats(entita));
+        pannello.add(puntiLivelli(entita));
+
+        return new Pagina("Statistiche di " + entita.getNome(), pannello, btnSin, btnDs, null);
     }
-    /**
-     * Displays skills information in a panel for the given entity
-     */
-
-    public void mostraSkills(JPanel pannello, Entita entita) {
-        // Crea un'area di testo per visualizzare e aggiungere testo
-        JTextArea textArea = new JTextArea();
-        textArea.setBounds(UIUtils.getX(45), UIUtils.getY(50), UIUtils.getX(24), UIUtils.getY(20));
-        textArea.setLineWrap(true); // Abilita gli a capo automatici
-        textArea.setWrapStyleWord(true); // Spezza le linee solo tra le parole
-        textArea.setEditable(false); // Rendi il testo non modificabile dall'utente
-        textArea.setOpaque(true);
-
-
-        // Aggiungi uno scroll pane che contiene l'area di testo
-        JScrollPane scrollPane = new JScrollPane(
-                textArea,
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-        );
-
-        scrollPane.setBounds(UIUtils.getX(45), UIUtils.getY(50), UIUtils.getX(24), UIUtils.getY(20));
-        // Aggiungi lo scroll pane al pannello principale
-
-        // Popola l'area di testo con le skill dell'entità
-        if (entita.getPassiva() != null && !entita.getPassiva().getSkills().isEmpty()) {
-            textArea.append("Nome passiva: " +  eroe.getPassiva().getNome() + ":" + "\n------------------");
-            String condizione = "";
-            for (Skill skill : entita.getPassiva().getSkills()) {
-                //↓
-                String kit = skill.getEffect().toUpperCase();
-                var parts = kit.split(" ");
-                var condizioneNuova = "";
-                if(parts.length <= 6)
-                    condizioneNuova = "\n↓ Effetti base (sempre attivi)" + "\n" ;
-                else {
-                    String seScrivere = Objects.equals(parts[5], "ATTACCANTE") ? "": parts[5];
-                    condizioneNuova = "\n↓ SE " + seScrivere + " " + parts[6] + " " + parts[7] + " " + parts[8] + "\n";
-                }
-                if(!Objects.equals(condizione, condizioneNuova)){
-                    condizione = condizioneNuova;
-                    textArea.append(condizione);
-                }
-                String seScrivere = Objects.equals(parts[0], "ATTACCANTE") ? "": parts[0];
-                if(parts.length <= 6) {
-                    textArea.append("  ->" + seScrivere + " " + parts[1] +" "+ parts[2] +" "+ parts[3] + "% " + skill.getTipoDiUtilizzo() + "\n");
-                }
-                else if(parts.length == 9) {
-                    textArea.append("  ->" + seScrivere + " " + parts[1] + " " + parts[2] + " " + parts[3] + "%\n");
-                }
-            }
-        } else {
-            textArea.setText("Nessuna skill disponibile...");
-        }
-        pannello.add(scrollPane);
-    }
-
-    /**
-     * Mostra le stats del domain
-     */
-    public void mostraDomain(JPanel pannello, Entita entita) {
-        JPanel stats = new JPanel(new GridLayout(8, 2));
-        stats.setBounds(UIUtils.getX(70), UIUtils.getY(30), UIUtils.getX(15), UIUtils.getY(20));
-        stats.setBackground(Color.white);
-        if(entita.getDomain() == null){
-            stats.add(new JLabel("Nessun dominio"));
-            return;
-        }
-        stats.add(new JLabel("Nome : " + entita.getDomain().getNome()));
-        stats.add(new JLabel("Danno : " + entita.getDomain().getDanno()));
-        stats.add(new JLabel("Probabilità di attivazione : " + entita.getDomain().getChance()));
-        stats.add(new JLabel("Tipo di target : " + entita.getDomain().getTarget()));
-        stats.add(new JLabel("Tipo di effetto : " + entita.getDomain().getPassiveEffects()));
-        stats.add(new JLabel(entita.getDomain().isActive()? "Domain ATTIVO" : "Domain NON ATTIVO"));
-        stats.add(new JLabel(entita.getDomain().getCooldown() <= 0? "PRONTO" : "IN COOLDOWN (" + entita.getDomain().getCooldown() + ")"));
-        pannello.add(stats);
-
-    }
-
-    /**
-     * Displays Domain name and damage to every enemy
-     */
-    public JPanel pannelloDomain(){
-        //PANNELLO DOPO L'ATTIVAZIONE DEL DOMAIN
-        Domain dom = eroe.getDomain();
-        JPanel domainPanel = new JPanel(new GridLayout(3, 1));
-        domainPanel.add(creaLabel("ESPANSIONE DEL DOMINIO", 1, 20, 10, 10, 18, Color.black));
-        domainPanel.add(creaLabel(dom == null? "domain is null": dom.getNome(), 1, 20, 10, 10, 18, Color.black));
-        JPanel risultatoDomainDamage = new JPanel(new GridLayout(1, nemiciCorrenti.size()));
-        for(Entita nemico : nemiciCorrenti) {
-            risultatoDomainDamage.add(creaLabel(
-                    dom == null ?
-                            "no domain": "  DANNO "+ (  dom.getDanno() - nemico.getDef() <= 0 ? 0 : dom.getDanno() - nemico.getDef())   + " A "+ nemico.getNome() + "   ",
-                    0,0,0,0,1,Color.black)
-            );
-        }
-        domainPanel.add(risultatoDomainDamage);
-        return domainPanel;
-    }
-
-    /**
-     * Adds a save button to save current game state
-     */
-    public void salva(JPanel pannello) {
-        if(eroe == null)
-            System.out.println("eroe è null!.");
-        GameSave save = new GameSave(eroe, List.of(0));
-        JButton button = creabottone("Salva", 1, 70, 10, 10, 14);
-        button.addActionListener(_ -> {
-            try {
-                GameSaveUtil.salvaSuFile(save, "save.json");
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }catch (NullPointerException e){
-                System.out.println("Errore salvataggio: eroe è null!.");
-            }
+    public Pagina mostraSkillsPagina(Entita entita){
+        var btnSin = new JButton("< Stats");
+        btnSin.addActionListener(_ -> {
+            panelContainer.add(statsPagina(entita), "stats");
+            cardLayout.show(panelContainer, "stats");
         });
-        pannello.add(button);
+        var btnDs = new JButton("Crea passiva/skill >");
+        btnDs.addActionListener(_ -> {
+            panelContainer.add(creaSkill(), "creaSkill");
+            cardLayout.show(panelContainer, "creaSkill");
+        });
+        if(eroe.getPassiva() == null)
+            return new Pagina("Passiva : CREA UN NUOVO PERSONAGGIO", null, btnSin, btnDs, null);
+        return new Pagina("Passiva : " + entita.getPassiva().getNome(), null, btnSin, btnDs, mostraSkills(eroe));
     }
-
-    /**
-     * Creates UI for leveling up stats and applying stat points
-     */
-    public void puntiLivelli(JPanel pannello, Entita entita) {
-
-
-        JPanel stats = new JPanel(new GridLayout(8, 3));
-        stats.setBounds(UIUtils.getX(45), UIUtils.getY(20), UIUtils.getX(24), UIUtils.getY(30));
-        stats.setBackground(Color.white);
-
-        // Add header text
-        stats.add(new JLabel("Per ogni punto aumenta lo scaling"));
-        stats.add(new JLabel("livello attuale : " + entita.getLvl()));
-        stats.add(new JLabel(""));
-
-        UpgradePoints points = entita.getPoints();
-
-        // Show available points
-        stats.add(new JLabel("Punti livello : "));
-        var ptLvl = creaLabel(entita.getPuntiLivello() + "", 1, 20, 10, 10, 10, null);
-        stats.add(ptLvl);
-        stats.add(new JLabel(""));
-
-        // Attack points
-        stats.add(new JLabel("atk : "));
-        var ptAtk = creaLabel(points.getPunti_atk() + "", 1, 20, 10, 10, 10, null);
-        stats.add(ptAtk);
-        JButton aumentaScaleAtk = creabottone("Aumenta scaling atk", 1, 20, 10, 10, 14);
-        aumentaScaleAtk.addActionListener(_ -> {
-            if (entita.getPuntiLivello() <= 0)
-                return;
-
-            entita.setPuntiLivello(entita.getPuntiLivello() - 1);
-            points.setPunti_atk(points.getPunti_atk() + 1);
-
-            ptLvl.setText(entita.getPuntiLivello() + "");
-            ptAtk.setText(points.getPunti_atk() + "");
-            stats(pannello, entita);
-
-            entita.setAtk(entita.getAtk() * 1.06F);
-
+    public Pagina mostraDomainPagina(Entita entita){
+        var btnSin = new JButton("< Crea passiva/skill");
+        btnSin.addActionListener(_ -> {
+            panelContainer.add(creaSkill(), "creaSkill");
+            cardLayout.show(panelContainer, "creaSkill");
         });
-        stats.add(aumentaScaleAtk);
-
-        // Defense points
-        stats.add(new JLabel("def : "));
-        var ptDef = creaLabel(points.getPunti_def() + "", 1, 20, 10, 10, 10, null);
-        stats.add(ptDef);
-        JButton aumentaScaleDef = creabottone("Aumenta scaling def", 1, 20, 10, 10, 10);
-        aumentaScaleDef.addActionListener(_ -> {
-            if (entita.getPuntiLivello() <= 0)
-                return;
-
-            points.setPunti_def(points.getPunti_def() + 1);
-            entita.setPuntiLivello(entita.getPuntiLivello() - 1);
-
-            entita.setDef(entita.getDef() * 1.06F);
-
-            ptLvl.setText(entita.getPuntiLivello() + "");
-            ptDef.setText(points.getPunti_def() + "");
-            stats(pannello, entita);
+        var btnDs = new JButton("Crea Domain >");
+        btnDs.addActionListener(_ -> {
+            panelContainer.add(creaDomain(), "creaDomain");
+            cardLayout.show(panelContainer, "creaDomain");
         });
-        stats.add(aumentaScaleDef);
-
-        // HP points
-        stats.add(new JLabel("hp : "));
-        var ptHp = creaLabel(points.getPunti_hp() + "", 1, 20, 10, 10, 10, null);
-        stats.add(ptHp);
-        JButton aumentaScaleHp = creabottone("Aumenta scaling hp", 1, 20, 10, 10, 10);
-        aumentaScaleHp.addActionListener(_ -> {
-            if (entita.getPuntiLivello() <= 0)
-                return;
-
-            entita.setPuntiLivello(entita.getPuntiLivello() - 1);
-            points.setPunti_hp(points.getPunti_hp() + 1);
-
-            entita.setHp(entita.getHp() * 1.04F);
-
-            ptLvl.setText(entita.getPuntiLivello() + "");
-            ptHp.setText(points.getPunti_hp() + "");
-            stats(pannello, entita);
-        });
-        stats.add(aumentaScaleHp);
-
-        if(entita.getSpecialAtk() != null) {
-            stats.add(new JLabel("Attacco Speciale: "));
-            var ptSp = creaLabel(points.getPunti_atkSp() + "", 1, 20, 10, 10, 10, null);
-            stats.add(ptSp);
-            JButton aumentaScaleSp = creabottone("Aumenta scaling sp", 1, 20, 10, 10, 10);
-            aumentaScaleSp.addActionListener(_ -> {
-                if (entita.getPuntiLivello() <= 0)
-                    return;
-                entita.setPuntiLivello(entita.getPuntiLivello() - 1);
-                points.setPunti_atkSp(points.getPunti_atkSp() + 1);
-
-                entita.getSpecialAtk().setDanno(entita.getSpecialAtk().getDanno() * 1.05F);
-
-                ptLvl.setText(entita.getPuntiLivello() + "");
-                ptSp.setText(points.getPunti_atkSp() + "");
-                stats(pannello, entita);
-            });
-            stats.add(aumentaScaleSp);
-        }
-
-        if(entita.getDomain() != null) {
-            stats.add(new JLabel("Danno dominio : "));
-            var ptDom = creaLabel(points.getPunti_domain() + "", 1, 20, 10, 10, 10, null);
-            stats.add(ptDom);
-            JButton aumentaScaleDom = creabottone("Aumenta scaling dom", 1, 20, 10, 10, 10);
-            aumentaScaleDom.addActionListener(_ -> {
-                if (entita.getPuntiLivello() <= 0)
-                    return;
-                entita.setPuntiLivello(entita.getPuntiLivello() - 1);
-                points.setPunti_domain(points.getPunti_domain() + 1);
-
-                entita.getDomain().setDanno(entita.getDomain().getDanno() * 1.05F);
-
-                ptLvl.setText(entita.getPuntiLivello() + "");
-                ptDom.setText(points.getPunti_domain() + "");
-                mostraDomain(pannello, entita);
-
-            });
-            stats.add(aumentaScaleDom);
-        }
-        pannello.add(stats);
+        if(entita.getDomain() == null)
+            return new Pagina("Domain : CREA UN NUOVO PERSONAGGIO", null, btnSin, btnDs, null);
+        if(entita.getLvl() < 10)
+            return new Pagina("Raggiungi livello 10 e vedrai", new JPanel(), btnSin, btnDs, null);
+        return new Pagina("Domain : " + entita.getDomain().getNome(), mostraDomain(entita), btnSin, btnDs, null);
     }
-
     /**
      * Creates UI for creating a new hero character
      */
-    public void creaEroe(JPanel pannello) {
+    public Pagina creaEroe() {
         JPanel stats = new JPanel();
         stats.setBounds(UIUtils.getX(70), UIUtils.getY(60), UIUtils.getX(25), UIUtils.getY(15));
         stats.setLayout(new GridLayout(4, 2, 12, UIUtils.getY(1)));
@@ -753,11 +411,17 @@ public class Home extends JFrame {
                     1,
                     1,
                     3,
+                    0,
+                    5,
                     new UpgradePoints(0,0,0,0,0),
                     new MaxValues(
                             30,
                             1,
-                            3
+                            3,
+                            0,
+                            0,
+                            5,
+                            0
                     ),
                     new SkillAttacco(
                             nomeMossa.getText(),
@@ -778,8 +442,595 @@ public class Home extends JFrame {
         });
         stats.add(crea);
 
-        pannello.add(stats);
+        var btnSin = new JButton("< Crea Domain");
+        btnSin.addActionListener(_ -> {
+            panelContainer.add(creaDomain(), "creaDomain");
+            cardLayout.show(panelContainer, "creaDomain");
+        });
+        var btnDs = new JButton("Home >");
+        btnDs.addActionListener(_ -> {
+            try {
+                panelContainer.add(inizio(), "home");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            cardLayout.show(panelContainer, "home");
+        });
+
+        return new Pagina("Crea/resetta personaggio", stats, btnSin, btnDs, null);
     }
+    /**
+     * Creates a panel for creating and managing skills.
+     * Allows users to create new skills, manage passive abilities, and save/cancel skills.
+     *
+     */
+    public Pagina creaSkill() {
+        if (eroe.getPassive_acquisite() == null)
+            eroe.setPassive_acquisite(new ArrayList<>());
+        // Create main panel with grid layout
+        var panel = new JPanel(new GridLayout(7, 2));
+        panel.setBounds(UIUtils.getX(45), UIUtils.getY(70), UIUtils.getX(24), UIUtils.getY(20));
+
+        // Add skill name input
+        panel.add(new JLabel("Skill: "));
+        JTextField skill = new JTextField();
+        panel.add(skill);
+
+        // Add passive ability name input
+        panel.add(new JLabel("Nome passiva: "));
+        JTextField nomePassiva = new JTextField();
+        panel.add(nomePassiva);
+
+        // Add skill type selection
+        panel.add(new JLabel("Attivazione: "));
+        JComboBox<TypeOfSkill> tipi = new JComboBox<>(TypeOfSkill.values());
+        panel.add(tipi);
+
+        // Add create skill button
+        panel.add(new JLabel("Premi per creare la skill: "));
+        JButton crea = creabottone("Crea Skill", UIUtils.getX(45), UIUtils.getY(80), UIUtils.getX(24), UIUtils.getY(5), 14);
+        crea.addActionListener(_ -> {
+            if (skill.getText().isEmpty()) {
+                mostraErrore("Skill vuoto", "Inserisci un nome per il nuovo skill");
+                return;
+            }
+            // Create new skill and add to hero's passive
+            String effect = skill.getText();
+            Skill nuovaSkill = new Skill(
+                    effect,
+                    false,
+                    (TypeOfSkill) tipi.getSelectedItem()
+            );
+            eroe.getPassiva().getSkills().add(nuovaSkill);
+
+            // Save game state and refresh UI
+            try {
+                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(mostraSkillsPagina(eroe), "skills");
+                cardLayout.show(panelContainer, "skills");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+        });
+        panel.add(crea);
+
+        // Add clear passive button
+        panel.add(new JLabel("Bottone per pulire questa passiva: "));
+        var cancella = new JButton("Cancella passiva");
+        cancella.addActionListener(_ -> {
+            if (eroe.getPassiva().getSkills().isEmpty()) {
+                mostraErrore("Nessun skill disponibile", "Non ci sono skill da cancellare");
+                return;
+            }
+            if (sceltaYN("ARE YOU SURE?", "Vuoi pulire la passiva?") == 0) {
+                // Clear passive name and skills
+                eroe.getPassiva().setNome("");
+                eroe.getPassiva().getSkills().clear();
+                try {
+                    GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                    panelContainer.add(mostraSkillsPagina(eroe), "skills");
+                    cardLayout.show(panelContainer, "skills");
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+        });
+        panel.add(cancella);
+
+        // Add active passive selector
+        panel.add(new JLabel("Passiva attiva: "));
+        JComboBox<Passiva> passive = new JComboBox<>();
+        if (!eroe.getPassive_acquisite().isEmpty())
+            passive = new JComboBox<>(eroe.getPassive_acquisite().toArray(new Passiva[0]));
+        JComboBox<Passiva> finalPassive = passive;
+        passive.addActionListener(_ -> {
+            // Update hero's active passive
+            eroe.setPassiva((Passiva) finalPassive.getSelectedItem());
+            try {
+                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(mostraSkillsPagina(eroe), "skills");
+                cardLayout.show(panelContainer, "skills");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        panel.add(passive);
+
+        // Add a save passive button
+        panel.add(new JLabel("Bottone per salvare questa passiva: "));
+        var savePassive = new JButton("Salva passiva");
+        savePassive.addActionListener(_ -> {
+            // Add passive if new
+            if (!eroe.getPassive_acquisite().contains(eroe.getPassiva()) && eroe.getPassiva() != null) {
+                if (!nomePassiva.getText().isEmpty())
+                    eroe.getPassiva().setNome(nomePassiva.getText());
+                eroe.getPassive_acquisite().add(eroe.getPassiva());
+            }
+            try {
+                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(mostraSkillsPagina(eroe), "skills");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            cardLayout.show(panelContainer, "Home");
+        });
+
+        panel.add(savePassive);
+        var btnSin = new JButton("< Passiva");
+        btnSin.addActionListener(_ -> {
+            panelContainer.add(mostraSkillsPagina(eroe), "passiva");
+            cardLayout.show(panelContainer, "passiva");
+        });
+        var btnDs = new JButton("Domain >");
+        btnDs.addActionListener(_ -> {
+            panelContainer.add(mostraDomainPagina(eroe), "domain");
+            cardLayout.show(panelContainer, "domain");
+        });
+        return new Pagina("Crea passiva/skill", panel, btnSin, btnDs, null);
+    }
+    /**
+     * Creates the level selection panel
+     */
+    public JPanel sceltaLvl() {
+        svuotaLog();
+
+        var panel = new JPanel();
+        panel.setLayout(new GridLayout(5, 3));
+
+        // Create buttons for each level
+        for (Level lvl : livelli()) {
+
+            var bottone = creabottone("lvl " + lvl.getLvl() + " lvl racc." + lvl.getLivello_raccomandato(), 1, 10, 10, 10, 20);
+            bottone.addActionListener(_ -> {
+                try {
+                    avviaPartita(lvl);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            panel.add(bottone);
+        }
+        var bottoneRit = creabottone("Ritorna al menu principale", 1, 10, 10, 10, 20);
+        bottoneRit.addActionListener(_ -> cardLayout.show(panelContainer,"Home"));
+        panel.add(bottoneRit);
+
+        return panel;
+    }
+
+    //PANNELLI PER INFORMAZIONI O CREAZIONE
+    /**
+     * Adjusts the given points according to the specified passive effect.
+     * Reduces or increases the points based on the effect type.
+     * Throws an IllegalStateException for unknown effects.
+     *
+     * @param punti The initial points to be modified.
+     * @param passiveEffect The passive effect that influences the adjustment.
+     * @return The adjusted point value after applying the effect.
+     */
+    public int parsePuntiEffetti(int punti, PassiveEffect passiveEffect){
+        switch (passiveEffect) {
+            case POISON -> punti -= 10;
+            case BLEEDING -> punti -= 13;
+            case BURNING -> punti -= 15;
+            case DEF_DEBUFF -> punti -= 25;
+            case ATK_DEBUFF -> punti -= 20;
+            case OVERALL_DEBUFF -> punti -= 35;
+            case NOEFFECT -> punti += 1;
+
+            case null -> System.out.println("nullo in creaDomain");
+            default -> throw new IllegalStateException("Unexpected value: " + passiveEffect);
+        }
+        System.out.println(punti + "dopo");
+        return punti;
+    }
+    /**
+     * Creates a panel showing entity stats and skills
+     */
+    public JPanel stats(Entita entita) {
+        if(entita == null)
+            return null;
+        JPanel stats = new JPanel();
+        stats.setBounds(UIUtils.getX(70), UIUtils.getY(10), UIUtils.getX(15), UIUtils.getY(20));
+        stats.setLayout(new GridLayout(12, 1));
+        stats.setBackground(Color.white);
+
+        entita.levelUp();
+
+        // Create health bar with color coding
+        var barraHp = creaProgressBar(0, (int) entita.getMaxValues().getMaxHp(), (int) entita.getHp());
+        if (barraHp.getValue() < (barraHp.getMaximum() - barraHp.getMinimum()) / 2)
+            barraHp.setBackground(Color.red);
+        else if (barraHp.getValue() < (barraHp.getMaximum() / 100 * 70))
+            barraHp.setBackground(Color.orange);
+        else
+            barraHp.setBackground(Color.green);
+
+        // Add stat labels🟩 🟥
+        stats.add(new JLabel("Nome: " + entita.getNome()));
+        stats.add(new JLabel("Livello: " + entita.getLvl()));
+        stats.add(new JLabel("Hp: " + entita.getHp() + "/" + entita.getMaxValues().getMaxHp() + (entita.getHp()<entita.getMaxValues().getMaxHp() ? "🟥": (entita.getHp()==entita.getMaxValues().getMaxHp() ? "":"🟩"))));
+        stats.add(barraHp);
+        stats.add(new JLabel("Exp: " + entita.getXp()));
+        stats.add(new JLabel("Def: " + entita.getDef()+ (entita.getDef()<entita.getMaxValues().getMaxDef() ? "🟥": (entita.getDef()==entita.getMaxValues().getMaxDef() ? "":"🟩"))));
+        stats.add(new JLabel("Attacco: " + entita.getAtk() + (entita.getAtk()<entita.getMaxValues().getMaxAtk() ? "🟥": (entita.getAtk()==entita.getMaxValues().getMaxAtk() ? "":"🟩"))));
+        //MODIFICARE
+        stats.add(new JLabel("Evasione: " + entita.getEvasione() + (entita.getEvasione()<entita.getMaxValues().getMaxEva() ? "🟥": (entita.getEvasione()==entita.getMaxValues().getMaxEva() ? "":"🟩"))));
+        stats.add(new JLabel("Possibilità di critico: " + entita.getCritico() + (entita.getCritico()<entita.getMaxValues().getMaxCrit() ? "🟥": (entita.getCritico()==entita.getMaxValues().getMaxCrit() ? "":"🟩"))));
+        stats.add(new JLabel("Attacco Speciale: " + entita.getSpecialAtk().getNomeAttacco()));
+        stats.add(new JLabel("Danno Speciale: " + entita.getSpecialAtk().getDanno() + (entita.getSpecialAtk().getDanno()<entita.getMaxValues().getMaxSp() ? "🟥": (entita.getSpecialAtk().getDanno()==entita.getMaxValues().getMaxSp() ? "":"🟩"))));
+
+        return stats;
+    }
+
+    /**
+     * Creates a panel with domain-related information and a dropdown for selecting passive effects.
+     * Adds the created panel to the provided parent panel.
+     *
+     */
+    public JPanel sceltaDomain() {
+
+        System.out.println(eroe == null);
+        if(eroe == null || eroe.getDomain() == null) {
+            return null;
+        }
+        if(eroe.getDomain_acquisiti() == null)
+            eroe.setDomain_acquisiti(List.of(eroe.getDomain()));
+        System.out.println("ciao");
+
+        JPanel stats = new JPanel();
+        stats.setBounds(UIUtils.getX(86), UIUtils.getY(10), UIUtils.getX(13), UIUtils.getY(15));
+        stats.setLayout(new GridLayout(3, 2));
+        stats.setBackground(Color.white);
+
+        JComboBox<Domain> domains = new JComboBox<>(
+                eroe.getDomain_acquisiti().toArray(new Domain[0])
+        );
+
+        // Nel pannello:
+        stats.add(new JLabel("Domini in possesso: "));
+        stats.add(domains);
+
+        JButton salvaDomain = creabottone("scegli", 0, 0, 0, 0, 14);
+
+        salvaDomain.addActionListener(_ -> {
+            Domain selezionato = (Domain) domains.getSelectedItem();
+            eroe.setDomain(selezionato);
+            try {
+                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(mostraDomainPagina(eroe), "Domain");
+                cardLayout.show(panelContainer, "Domain");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+        });
+
+        stats.add(salvaDomain);
+        return stats;
+    }
+
+
+    /**
+     * Displays skills information in a panel for the given entity
+     */
+
+    public JScrollPane mostraSkills(Entita entita)  {
+        // Crea un'area di testo per visualizzare e aggiungere testo
+        JTextArea textArea = new JTextArea();
+        textArea.setBounds(UIUtils.getX(45), UIUtils.getY(50), UIUtils.getX(24), UIUtils.getY(20));
+        textArea.setLineWrap(true); // Abilita gli a capo automatici
+        textArea.setWrapStyleWord(true); // Spezza le linee solo tra le parole
+        textArea.setEditable(false); // Rendi il testo non modificabile dall'utente
+        textArea.setOpaque(true);
+
+        // Aggiungi uno scroll pane che contiene l'area di testo
+        JScrollPane scrollPane = new JScrollPane(
+                textArea,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+        );
+
+        scrollPane.setBounds(UIUtils.getX(45), UIUtils.getY(50), UIUtils.getX(24), UIUtils.getY(20));
+        // Aggiungi lo scroll pane al pannello principale
+
+        // Popola l'area di testo con le skill dell'entità
+        if (entita.getPassiva() != null && !entita.getPassiva().getSkills().isEmpty()) {
+            textArea.append("Nome passiva: " +  eroe.getPassiva().getNome() + ":" + "\n------------------");
+            String condizione = "";
+            for (Skill skill : entita.getPassiva().getSkills()) {
+                //↓
+                String kit = skill.getEffect().toUpperCase();
+                var parts = kit.split(" ");
+                var condizioneNuova = "";
+
+                if(parts.length <= 6)
+                    condizioneNuova = "\n↓ Effetti base (sempre attivi)" + "\n" ;
+                else {
+                    String seScrivere = Objects.equals(parts[5], "ATTACCANTE") ? "": parts[5];
+                    condizioneNuova = "\n↓ SE " + seScrivere + " " + parts[6] + " " + parts[7] + " " + parts[8] + "\n";
+                }
+                if(!Objects.equals(condizione, condizioneNuova)){
+                    condizione = condizioneNuova;
+                    textArea.append(condizione);
+                }
+                String seScrivere = Objects.equals(parts[0], "ATTACCANTE") ? "": parts[0];
+                if(parts.length <= 6) {
+                    textArea.append("  ->" + seScrivere + " " + parts[1] +" "+ parts[2] +" "+ parts[3] + "% " + skill.getTipoDiUtilizzo() + "\n");
+                }
+                else if(parts.length == 9) {
+                    textArea.append("  ->" + seScrivere + " " + parts[1] + " " + parts[2] + " " + parts[3] + "% " + (!Objects.equals(parts[1], "HP")?
+                                   (skill.isAttivo() ? "✅":"❌"):(skill.isAttivo() ? "🔥":"❌"))+ "\n");
+                }
+            }
+        } else {
+            textArea.setText("Nessuna skill disponibile...");
+        }
+
+        return scrollPane;
+    }
+
+    /**
+     * Mostra le stats del domain
+     */
+    public JPanel mostraDomain(Entita entita) {
+
+        JPanel stats = new JPanel(new GridLayout(8, 2));
+        stats.setBounds(UIUtils.getX(70), UIUtils.getY(30), UIUtils.getX(15), UIUtils.getY(20));
+        stats.setBackground(Color.white);
+        if(entita.getDomain() == null){
+            stats.add(new JLabel("Nessun dominio"));
+            return null;
+        }
+        stats.add(new JLabel("Nome : " + entita.getDomain().getNome()));
+        stats.add(new JLabel("Danno : " + entita.getDomain().getDanno()));
+        stats.add(new JLabel("Probabilità di attivazione : " + entita.getDomain().getChance()));
+        stats.add(new JLabel("Tipo di target : " + entita.getDomain().getTarget()));
+        stats.add(new JLabel("Tipo di effetto : " + entita.getDomain().getPassiveEffects()));
+        stats.add(new JLabel(entita.getDomain().isActive()? "Domain ATTIVO" : "Domain NON ATTIVO"));
+        stats.add(new JLabel(entita.getDomain().getCooldown() <= 0? "PRONTO" : "IN COOLDOWN (" + entita.getDomain().getCooldown() + ")"));
+        return stats;
+    }
+
+
+    /**
+     * Displays Domain name and damage to every enemy
+     */
+    public JPanel pannelloDomain(){
+        //PANNELLO DOPO L'ATTIVAZIONE DEL DOMAIN
+        Domain dom = eroe.getDomain();
+        JPanel domainPanel = new JPanel(new GridLayout(3, 1));
+        domainPanel.add(creaLabel("ESPANSIONE DEL DOMINIO", 1, 20, 10, 10, 18, Color.black));
+        domainPanel.add(creaLabel(dom == null? "domain is null": dom.getNome(), 1, 20, 10, 10, 18, Color.black));
+        JPanel risultatoDomainDamage = new JPanel(new GridLayout(1, nemiciCorrenti.size()));
+        for(Entita nemico : nemiciCorrenti) {
+            risultatoDomainDamage.add(creaLabel(
+                    dom == null ?
+                            "no domain": "  DANNO "+ (  dom.getDanno() - nemico.getDef() <= 0 ? 0 : dom.getDanno() - nemico.getDef())   + " A "+ nemico.getNome() + "   ",
+                    0,0,0,0,1,Color.black)
+            );
+        }
+        domainPanel.add(risultatoDomainDamage);
+        return domainPanel;
+    }
+
+    /**
+     * Creates UI for leveling up stats and applying stat points
+     */
+    public JPanel puntiLivelli(Entita entita) {
+
+
+        JPanel stats = new JPanel(new GridLayout(9, 3));
+        stats.setBounds(UIUtils.getX(45), UIUtils.getY(20), UIUtils.getX(24), UIUtils.getY(30));
+        stats.setBackground(Color.white);
+
+        // Add header text
+        stats.add(new JLabel("Per ogni punto aumenta lo scaling"));
+        stats.add(new JLabel("livello attuale : " + entita.getLvl()));
+        stats.add(new JLabel(""));
+
+        UpgradePoints points = entita.getPoints();
+
+        // Show available points
+        stats.add(new JLabel("Punti livello : "));
+        var ptLvl = creaLabel(entita.getPuntiLivello() + "", 1, 20, 10, 10, 10, null);
+        stats.add(ptLvl);
+        stats.add(new JLabel(""));
+
+        // Attack points
+        stats.add(new JLabel("Attacco : "));
+        var ptAtk = creaLabel(points.getPunti_atk() + "", 1, 20, 10, 10, 10, null);
+        stats.add(ptAtk);
+        JButton aumentaScaleAtk = creabottone("Aumenta scaling atk", 1, 20, 10, 10, 14);
+        aumentaScaleAtk.addActionListener(_ -> {
+            if (entita.getPuntiLivello() <= 0)
+                return;
+
+            entita.setPuntiLivello(entita.getPuntiLivello() - 1);
+            points.setPunti_atk(points.getPunti_atk() + 1);
+
+            entita.setAtk(entita.getAtk() * 1.06F);
+            entita.getMaxValues().setMaxAtk(entita.getAtk());
+            try {
+                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(statsPagina(eroe), "stats");
+                cardLayout.show(panelContainer, "stats");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+
+
+        });
+        stats.add(aumentaScaleAtk);
+
+        // Defense points
+        stats.add(new JLabel("Difesa : "));
+        var ptDef = creaLabel(points.getPunti_def() + "", 1, 20, 10, 10, 10, null);
+        stats.add(ptDef);
+        JButton aumentaScaleDef = creabottone("Aumenta scaling def", 1, 20, 10, 10, 10);
+        aumentaScaleDef.addActionListener(_ -> {
+            if (entita.getPuntiLivello() <= 0)
+                return;
+
+            points.setPunti_def(points.getPunti_def() + 1);
+            entita.setPuntiLivello(entita.getPuntiLivello() - 1);
+
+            entita.setDef(entita.getDef() * 1.05F);
+            entita.getMaxValues().setMaxDef(entita.getDef());
+
+            try {
+                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(statsPagina(eroe), "stats");
+                cardLayout.show(panelContainer, "stats");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        stats.add(aumentaScaleDef);
+
+        // HP points
+        stats.add(new JLabel("Hp : "));
+        var ptHp = creaLabel(points.getPunti_hp() + "", 1, 20, 10, 10, 10, null);
+        stats.add(ptHp);
+        JButton aumentaScaleHp = creabottone("Aumenta scaling hp", 1, 20, 10, 10, 10);
+        aumentaScaleHp.addActionListener(_ -> {
+            if (entita.getPuntiLivello() <= 0)
+                return;
+
+            entita.setPuntiLivello(entita.getPuntiLivello() - 1);
+            points.setPunti_hp(points.getPunti_hp() + 1);
+
+            entita.setHp(entita.getHp() * 1.04F);
+            entita.getMaxValues().setMaxHp(entita.getHp());
+            try {
+                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(statsPagina(eroe), "stats");
+                cardLayout.show(panelContainer, "stats");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        stats.add(aumentaScaleHp);
+        //------------
+        stats.add(new JLabel("Possibilità di critico: "));
+        var aumentoCritico = creaLabel(eroe.getCritico() + "%", 1, 20, 10, 10, 10, null);
+        stats.add(aumentoCritico);
+        JButton aumentaCrit = creabottone("Aumenta possibilità di crit del 0.5%", 1, 20, 10, 10, 14);
+        aumentaCrit.addActionListener(_ -> {
+            if (entita.getPuntiLivello() <= 0)
+                return;
+            entita.setPuntiLivello(entita.getPuntiLivello() - 1);
+            entita.setCritico(entita.getCritico() + 0.8F);
+            entita.getMaxValues().setMaxCrit(entita.getCritico());
+
+            try {
+                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(statsPagina(eroe), "stats");
+                cardLayout.show(panelContainer, "stats");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+        });
+        stats.add(aumentaCrit);//🟩 🟥
+
+        stats.add(new JLabel("Possibilità di evasione colpi: "));
+        var aumentoEva = creaLabel(eroe.getEvasione() + "%", 1, 20, 10, 10, 10, null);
+        stats.add(aumentoEva);
+        JButton aumentoEvasione = creabottone("Aumenta evasione (max 70)", 1, 20, 10, 10, 14);
+        aumentoEvasione.addActionListener(_ -> {
+            if (entita.getPuntiLivello() <= 0 || eroe.getEvasione() >= 65)
+                return;
+            entita.setPuntiLivello(entita.getPuntiLivello() - 1);
+            entita.setEvasione(entita.getEvasione() + 0.8F);
+            entita.getMaxValues().setMaxEva(entita.getEvasione());
+
+            try {
+                GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                panelContainer.add(statsPagina(eroe), "stats");
+                cardLayout.show(panelContainer, "stats");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+        });
+        stats.add(aumentoEvasione);
+
+        if(entita.getSpecialAtk() != null) {
+            stats.add(new JLabel("Danno Attacco Speciale: "));
+            var ptSp = creaLabel(points.getPunti_atkSp() + "", 1, 20, 10, 10, 10, null);
+            stats.add(ptSp);
+            JButton aumentaScaleSp = creabottone("Aumenta scaling sp", 1, 20, 10, 10, 10);
+            aumentaScaleSp.addActionListener(_ -> {
+                if (entita.getPuntiLivello() <= 0)
+                    return;
+                entita.setPuntiLivello(entita.getPuntiLivello() - 1);
+                points.setPunti_atkSp(points.getPunti_atkSp() + 1);
+
+                entita.getSpecialAtk().setDanno(entita.getSpecialAtk().getDanno() * 1.05F);
+                entita.getMaxValues().setMaxSp(entita.getSpecialAtk().getDanno());
+                try {
+                    GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                    panelContainer.add(statsPagina(eroe), "stats");
+                    cardLayout.show(panelContainer, "stats");
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            stats.add(aumentaScaleSp);
+        }
+
+        if(entita.getDomain() != null) {
+            stats.add(new JLabel("Danno dominio : "));
+            var ptDom = creaLabel(points.getPunti_domain() + "", 1, 20, 10, 10, 10, null);
+            stats.add(ptDom);
+            JButton aumentaScaleDom = creabottone("Aumenta scaling dominio", 1, 20, 10, 10, 10);
+            aumentaScaleDom.addActionListener(_ -> {
+                if (entita.getPuntiLivello() <= 0)
+                    return;
+                entita.setPuntiLivello(entita.getPuntiLivello() - 1);
+                points.setPunti_domain(points.getPunti_domain() + 1);
+
+                entita.getDomain().setDanno(entita.getDomain().getDanno() * 1.05F);
+                entita.getMaxValues().setMaxDomain(entita.getDomain().getDanno());
+
+                try {
+                    GameSaveUtil.salvaSuFile(new GameSave(eroe, List.of(0)), "save.json");
+                    panelContainer.add(statsPagina(eroe), "stats");
+                    cardLayout.show(panelContainer, "stats");
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+
+            });
+            stats.add(aumentaScaleDom);
+        }
+        return stats;
+    }
+
+
 
     //DOMAINS
     /**
@@ -838,11 +1089,18 @@ public class Home extends JFrame {
                 1,
                 1,
                 3,
+                0,
+                0,
                 new UpgradePoints(0,0,0,0,0),
                 new MaxValues(
                         30,
                         1,
-                        3
+                        3,
+                        15,
+                        0,
+                        0,
+                        0
+
                 ),
                 new SkillAttacco(
                         "crea un nuovo account",
@@ -867,7 +1125,9 @@ public class Home extends JFrame {
                 1,
                 2,
                 2,
-                new MaxValues(1000,2,2),
+                0,
+                0,
+                new MaxValues(1000,2,2,10,0,0,0),
                 new SkillAttacco(
                         "dummy",
                         10,
@@ -878,7 +1138,7 @@ public class Home extends JFrame {
         );
 
     }
-    public Entita negro(int xp) {
+    public Entita negro(int xp){
         return new Entita(
                 "Stronzo",
                 10,
@@ -887,10 +1147,16 @@ public class Home extends JFrame {
                 0,
                 1,
                 3,
+                0,
+                0,
                 new MaxValues(
                         10,
                         1,
-                        3
+                        3,
+                        10,
+                        0,
+                        0,
+                        0
                 ),
                 new SkillAttacco(
                         "pugno forte",
@@ -910,10 +1176,16 @@ public class Home extends JFrame {
                 0,
                 1,
                 3,
+                0,
+                0,
                 new MaxValues(
                         10,
                         1,
-                        3
+                        3,
+                        10,
+                        0,
+                        0,
+                        0
                 ),
                 new SkillAttacco(
                         "pugno forte",
@@ -933,10 +1205,16 @@ public class Home extends JFrame {
                 0,
                 2.5F,
                 3F,
+                70,
+                5,
                 new MaxValues(
                         21,
                         2.5F,
-                        3F
+                        3F,
+                        10,
+                        20,
+                        5,
+                        0
                 ),
                 new SkillAttacco(
                         "fetore",
@@ -949,17 +1227,23 @@ public class Home extends JFrame {
     }
     public Entita evan(int xp) {
         return new Entita(
-                "Palnegri",
+                "Evan",
                 25,
                 xp,
                 10,
                 0,
                 5F,
                 2.5F,
+                0,
+                10,
                 new MaxValues(
                         25,
                         5F,
-                        2.5F
+                        2.5F,
+                        8,
+                        0,
+                        10,
+                        0
                 ),
                 new SkillAttacco(
                         "010 -> prigione",
@@ -979,10 +1263,16 @@ public class Home extends JFrame {
                 0,
                 0,
                 5F,
+                30,
+                30,
                 new MaxValues(
                         18,
                         0,
-                        5F
+                        5F,
+                        10,
+                        30,
+                        30,
+                        0
                 ),
                 new SkillAttacco(
                         "Ballo del triangolo",
@@ -1003,10 +1293,16 @@ public class Home extends JFrame {
                 0,
                 5F,
                 2.3F,
+                0,
+                50,
                 new MaxValues(
                         25,
                         5F,
-                        2.5F
+                        2.5F,
+                        14,
+                        0,
+                        50,
+                        0
                 ),
                 new SkillAttacco(
                         "Sito web",
@@ -1028,10 +1324,16 @@ public class Home extends JFrame {
                 0,
                 4F,
                 4F,
+                30,
+                10,
                 new MaxValues(
-                        100,
+                        80,
                         4,
-                        4
+                        4,
+                        20,
+                        30,
+                        10,
+                        0
                 ),
                 new SkillAttacco(
                         "1 ora di carta, solo dopo il pc",
@@ -1141,12 +1443,12 @@ public class Home extends JFrame {
                                 palmeri(300000)
                         ))
                 )),
-                new Level(7, 100, 50000, List.of(
+                new Level(7, 70, 300000, List.of(
                         new Round(1, 20, List.of(
                                 moraRiccardo(1000000)
                         ))
                 )),
-                new Level(8, 120, 200000, List.of(
+                new Level(8, 60, 200000, List.of(
                         new Round(1, 20, List.of(
                                 mario(800000),
                                 mario(800000)
@@ -1154,38 +1456,31 @@ public class Home extends JFrame {
                         new Round(1, 20, List.of(
                                 palmeri(1300000)
                         ))
+                )),
+                new Level(9, 75, 500000, List.of(
+                        new Round(1, 20, List.of(
+                                mario(5000000),
+                                mario(5000000)
+                        )),
+                        new Round(1, 20, List.of(
+                                palmeri(10000000)
+                        ))
+                )),
+                new Level(10, 95, 3000000, List.of(
+                        new Round(1, 20, List.of(
+                                mario(100000000),
+                                mario(100000000),
+                                negro(100000000)
+                        )),
+                        new Round(1, 20, List.of(
+                                evan(900000000)
+                        ))
                 ))
+
         );
     }
     
-    /**
-     * Creates the level selection panel
-     */
-    public JPanel sceltaLvl() {
-        svuotaLog();
-    
-        var panel = new JPanel();
-        panel.setLayout(new GridLayout(5, 3));
-    
-        // Create buttons for each level
-        for (Level lvl : livelli()) {
 
-            var bottone = creabottone("lvl " + lvl.getLvl() + " lvl racc." + lvl.getLivello_raccomandato(), 1, 10, 10, 10, 20);
-            bottone.addActionListener(_ -> {
-                try {
-                    avviaPartita(lvl);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            panel.add(bottone);
-        }
-        var bottoneRit = creabottone("Ritorna al menu principale", 1, 10, 10, 10, 20);
-        bottoneRit.addActionListener(_ -> cardLayout.show(panelContainer,"Home"));
-        panel.add(bottoneRit);
-    
-        return panel;
-    }
 
     //PARTE DELLA BATTAGLIA
     /**
@@ -1229,7 +1524,7 @@ public class Home extends JFrame {
         pannelloNemici.setBounds(UIUtils.getX(0), UIUtils.getY(10), UIUtils.getX(100), UIUtils.getY(25));
         for (Entita nemico : nemiciCorrenti) {
             nemico.levelUp();
-            stats(pannelloNemici, nemico);
+            pannelloNemici.add(stats(nemico));
         }
         panel.add(pannelloNemici);
 
@@ -1388,10 +1683,11 @@ public class Home extends JFrame {
         // Hero panel showing stats and skills
         JPanel pannelloEroe = new JPanel(new GridLayout(2, 2));
         pannelloEroe.setBounds(UIUtils.getX(50), UIUtils.getY(50), UIUtils.getX(50), UIUtils.getY(35));
-        mostraSkills(pannelloEroe, eroe);
-        stats(pannelloEroe, eroe);
+        pannelloEroe.add(mostraSkills(eroe));
+        pannelloEroe.add(stats(eroe));
         pannelloEroe.add(new JLabel("Mosse speciali : " + eroe.getSpecialAtk().getUtilizzi()));
-        mostraDomain(pannelloEroe, eroe);
+        if(eroe.getDomain() != null)
+            pannelloEroe.add(mostraDomain(eroe));
 
         panel.add(pannelloEroe);
         panel.add(attackPanel);
@@ -1417,28 +1713,24 @@ public class Home extends JFrame {
         // Hero attacks
 
         CombatSystem combatSystem = new CombatSystem(eroe, nemicoSelezionato);
-        combatSystem.attivaSkills(nemiciCorrenti);
+        aggiungiLog(combatSystem.attivaSkills(nemiciCorrenti));
         if (speciale) {
             switch (combatSystem.applicaEffect()){
                 case NULL -> System.out.println("nullo");
                 case SUCCESS -> System.out.println("successo Passive");
             }
             if (eroe.getSpecialAtk().getUtilizzi() <= 0) {
-                combatSystem.attaccoBase();
+                aggiungiLog(combatSystem.attaccoBase(false));
             } else {
-                combatSystem.attaccoSpeciale();
-                aggiungiLog("ATTACCO SPECIALE DI " + combatSystem.getAttaccante().getNome() +
-                        " CONTRO " + combatSystem.getDefender().getNome() +
-                        " - NOME ATTACCO: " + combatSystem.getAttaccante().getSpecialAtk().getNomeAttacco());
-                eroe.getSpecialAtk().setUtilizzi(eroe.getSpecialAtk().getUtilizzi() - 1);
+                aggiungiLog(combatSystem.attaccoSpeciale());
             }
         } else {
-            combatSystem.attaccoBase();
+            aggiungiLog(combatSystem.attaccoBase(false));
         }
         if(combatSystem.getAttaccante().getDomain() != null) {
             if(combatSystem.getAttaccante().getDomain().isActive()){
-                aggiungiLog("DOMAIN attivo ancora per  " + combatSystem.getAttaccante().getDomain().getDurata()+ " turni");
-                aggiungiLog("DOMAIN disponibile tra " + combatSystem.getAttaccante().getDomain().getCooldown() + " turni");
+                aggiungiLog("⏱️DOMAIN attivo ancora per  " + combatSystem.getAttaccante().getDomain().getDurata()+ " turni");
+                if(eroe.getDomain().getCooldown() != 0){aggiungiLog("⌛️DOMAIN disponibile tra " + combatSystem.getAttaccante().getDomain().getCooldown() + " turni");}
             }
         }
         nemiciCorrenti.removeIf(nemico -> nemico.getHp() <= 0);
@@ -1461,12 +1753,15 @@ public class Home extends JFrame {
 
         indiceRoundCorrente++;
         if (indiceRoundCorrente < livelloCorrente.getRound().size()) {
+            if(eroe.getPassiva() != null) {
+                for (Skill skill : eroe.getPassiva().getSkills()) {
+                    skill.setAttivo(false);
+                }
+            }
             // Load next round enemies
             nemiciCorrenti = new ArrayList<>(livelloCorrente.getRound().get(indiceRoundCorrente).getNemici());
             mostraTurno();
         } else {
-            panelContainer.add(inizio(), "Home");
-            cardLayout.show(panelContainer, "Home");
             // Level complete
             new CombatSystem(eroe, null).disattivaSkills();
             // Update hero stats
@@ -1475,7 +1770,9 @@ public class Home extends JFrame {
                 dom.setCooldown(0);
                 dom.setActive(false);
                 dom.setDurata(dom.getDurataMax());
+                System.out.println("PR Domains : " + eroe.getDomain_acquisiti());
                 eroe.setDomain(dom.evoluzione(eroe));
+                System.out.println("Domains : " + eroe.getDomain_acquisiti());
             }
             eroe.getSpecialAtk().setUtilizzi(5);
             eroe.setXp(eroe.getXp() + livelloCorrente.getXp());
@@ -1504,20 +1801,17 @@ public class Home extends JFrame {
 
         Domain domain = eroe.getDomain();
         if (domain == null) return;
-        System.out.println("DOM : " + domain.isActive());
 
         //se è attivo applico i debuff e modifico cooldown e durata
         if(domain.isActive()) {
             reset = true;
-            System.out.println("e attivo");
-
             CombatSystem domainEffects = new CombatSystem(eroe, null);
             domainEffects.applicaEffectDomain(nemiciCorrenti);
 
             domain.setDurata(domain.getDurata() - 1);
             if(domain.getDurata() <= 0) {
                 domain.setActive(false);
-                domain.setCooldown(domain.getMaxCooldown());
+                domain.setCooldown(domain.getCooldown());
                 domain.setDurata(domain.getDurataMax()); // Ripristina per prossimo uso
             }
         } else if(domain.getCooldown() > 0) {
@@ -1568,6 +1862,7 @@ public class Home extends JFrame {
             cardLayout.show(panelContainer, "Home");
         } else {
             try {
+                aggiungiLog("--------Fine turno-------");
                 mostraTurno();
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -1600,17 +1895,12 @@ public class Home extends JFrame {
         Entita nemico = nemici.get(current);
         CombatSystem combatNemico = new CombatSystem(nemico, eroe);
 
-        // 80% chance of basic attack, 30% special
+        // 80% chance of basic attack, 20% special
         double casuale = Math.random() * 10;
         if (casuale <= 8) {
-            combatNemico.attaccoBase();
+            aggiungiLog(combatNemico.attaccoBase(false));
         } else {
-            combatNemico.attaccoSpeciale();
-            aggiungiLog("ATTACCO SPECIALE DI " + combatNemico.getAttaccante().getNome() +
-                              " CONTRO " + combatNemico.getDefender().getNome() +
-                              " - NOME ATTACCO: " + combatNemico.getAttaccante().getSpecialAtk().getNomeAttacco());
-            combatNemico.getAttaccante().
-                         getSpecialAtk().setUtilizzi(combatNemico.getAttaccante().getSpecialAtk().getUtilizzi() - 1);
+            aggiungiLog(combatNemico.attaccoSpeciale());
         }
 
         // Handle enemy defeat

@@ -19,6 +19,8 @@ public class Entita {
     private int lvl;
     private float def;
     private float atk;
+    private float evasione;
+    private float critico;
     private UpgradePoints points;
     private MaxValues maxValues;
     private SkillAttacco specialAtk;
@@ -27,7 +29,7 @@ public class Entita {
     private List<Domain> domain_acquisiti;
     private List<Passiva> passive_acquisite;
 
-    public Entita(String nome, float hp, float xp, float xp_per_livello, int lvl, float def, float atk, MaxValues maxValues, SkillAttacco specialAtk, Domain domain){
+    public Entita(String nome, float hp, float xp, float xp_per_livello, int lvl, float def, float atk,float evasione, float critico, MaxValues maxValues, SkillAttacco specialAtk, Domain domain){
         this.nome = nome;
         this.hp = hp;
         this.xp = xp;
@@ -35,6 +37,8 @@ public class Entita {
         this.lvl = lvl;
         this.def = def;
         this.atk = atk;
+        this.evasione = evasione;
+        this.critico = critico;
         this.maxValues = maxValues;
         this.specialAtk = specialAtk;
         this.domain = domain;
@@ -49,13 +53,17 @@ public class Entita {
             maxValues.setMaxHp( maxValues.getMaxHp() * 1.1F);
             maxValues.setMaxDef( maxValues.getMaxDef() * 1.1F);
             maxValues.setMaxAtk( maxValues.getMaxAtk() * 1.1F);
+
             def *= 1.1F;
             atk *= 1.1F;
-            if(domain != null)
+            if(domain != null) {
                 domain.setDanno(domain.getDanno() * 1.02F);
+                maxValues.setMaxDomain(maxValues.getMaxDomain() * 1.02F);
+            }
             xp -= xp_per_livello;
             if (specialAtk != null) {
                 specialAtk.setDanno(specialAtk.getDanno() * 1.1F);
+                maxValues.setMaxSp( maxValues.getMaxSp() * 1.1F);
             }
             xp_per_livello *= 1.2F;
         }

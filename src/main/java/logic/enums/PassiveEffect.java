@@ -1,4 +1,4 @@
-package logic.skills;
+package logic.enums;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

@@ -1,5 +1,6 @@
 package logic.skills;
 
+import logic.enums.PassiveEffect;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

@@ -11,4 +11,8 @@ public class MaxValues {
     private float maxHp;
     private float maxDef;
     private float maxAtk;
+    private float maxSp;
+    private float maxEva;
+    private float maxCrit;
+    private float maxDomain;
 }

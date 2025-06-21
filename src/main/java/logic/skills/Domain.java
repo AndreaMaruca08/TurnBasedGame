@@ -1,6 +1,8 @@
 package logic.skills;
 
 import logic.entita.Entita;
+import logic.enums.PassiveEffect;
+import logic.enums.Target;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -24,6 +26,8 @@ public class Domain {
     private int lvl;
 
     public Domain evoluzione(Entita personaggio){
+        if(this.getNome().isBlank())
+            return this;
         if(personaggio.getLvl() >= 40 && !this.getNome().contains("EVOLUTO")){
             this.setNome(this.getNome() + " EVOLUTO");
             this.setMaxCooldown(this.getMaxCooldown() - 1);

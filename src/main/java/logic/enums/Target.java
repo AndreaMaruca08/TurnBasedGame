@@ -1,4 +1,4 @@
-package logic.skills;
+package logic.enums;
 
 public enum Target {
     SINGLE_TARGET,

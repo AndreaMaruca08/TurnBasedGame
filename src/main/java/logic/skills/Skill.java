@@ -1,5 +1,6 @@
 package logic.skills;
 
+import logic.enums.TypeOfSkill;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

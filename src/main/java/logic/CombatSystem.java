@@ -2,6 +2,8 @@ package logic;
 
 import logic.entita.Entita;
 import logic.entita.MaxValues;
+import logic.enums.PassiveEffect;
+import logic.enums.ReturnValues;
 import logic.skills.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,33 +11,54 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 import java.util.Objects;
 
-import static logic.skills.PassiveEffect.*;
-import static logic.ReturnValues.*;
-import static logic.skills.TypeOfSkill.ONE_TIME;
-import static logic.skills.TypeOfSkill.REPEAT;
+import static logic.enums.PassiveEffect.*;
+import static logic.enums.ReturnValues.*;
+import static logic.enums.TypeOfSkill.ONE_TIME;
+import static logic.enums.TypeOfSkill.REPEAT;
 
 @Slf4j
 @Data
 @AllArgsConstructor
 public class CombatSystem {
     private Entita attaccante;
-    private Entita defender;
+    private Entita difensore;
 
     /**
      * Esegue un attacco base, calcolando il danno come differenza tra atk e def.
      */
-    public void attaccoBase() {
-        float danno = attaccante.getAtk() - defender.getDef();
+    public String attaccoBase(boolean speciale) {
+        String messaggio = "";
+        //se evade
+        if (Math.random() * 100 < difensore.getEvasione())
+            return "EVASIONE " + difensore.getNome() + " ha evaso l'attacco di " + attaccante.getNome();
+        float atk = 0.0F;
+        if(speciale){
+            atk = attaccante.getSpecialAtk().getDanno() * 1.20F;
+            attaccante.getSpecialAtk().setUtilizzi(attaccante.getSpecialAtk().getUtilizzi() - 1);
+        }else{
+             atk = attaccante.getAtk() * 1.20F;
+        }
+        float difesa = difensore.getDef();
+
+        //se critico ignora 50% difesa
+        if (Math.random() * 100 < attaccante.getCritico()) {
+            difesa = difesa * 0.5F;
+            messaggio += "🔥COLPO CRITICO DI " + attaccante.getNome();
+        }
+
+        float danno = atk - difesa;
         if (danno < 0) danno = 0;
-        defender.setHp(defender.getHp() - danno);
+        difensore.setHp(difensore.getHp() - danno);
+        if(!speciale)
+            return messaggio + (" 🤜" + attaccante.getNome() + " ha inflitto " + danno + " a " + difensore.getNome());
+        return messaggio + ("💥ATTACCO SPECIALE di " + attaccante.getNome() + " ha inflitto " + danno + " a " + difensore.getNome());
     }
+
     /**
      * Esegue un attacco speciale, calcolando il danno dalla skill attacco.
      */
-    public void attaccoSpeciale() {
-        float danno = attaccante.getSpecialAtk().getDanno() - defender.getDef();
-        if (danno < 0) danno = 0;
-        defender.setHp(defender.getHp() - danno);
+    public String attaccoSpeciale() {
+        return attaccoBase(true);
     }
 
     public ReturnValues domainExpansion(List<Entita> nemici){
@@ -43,7 +66,7 @@ public class CombatSystem {
             return NULL;
 
         switch (attaccante.getDomain().getTarget()){
-            case SINGLE_TARGET -> {return attaccoDomain(List.of(defender));}
+            case SINGLE_TARGET -> {return attaccoDomain(List.of(difensore));}
             case AOE -> {return attaccoDomain(nemici);}
         }
         return ERROR;
@@ -81,16 +104,16 @@ public class CombatSystem {
             return NULL;
 
         switch (attaccante.getSpecialAtk().getPassiveEffect()){
-            case POISON -> defender.setHp(defender.getHp() - (defender.getMaxValues().getMaxHp() / 100 * POISON.getValore()));
-            case DEF_DEBUFF -> defender.setDef(defender.getDef() - (defender.getDef() / 100 * DEF_DEBUFF.getValore()));
-            case GREAT_DEF_DEBUFF -> defender.setDef(defender.getDef() - (defender.getDef() / 100 * GREAT_DEF_DEBUFF.getValore()));
-            case ATK_DEBUFF -> defender.setAtk(defender.getAtk() - (defender.getAtk() / 100 * ATK_DEBUFF.getValore()));
-            case GREAT_ATK_DEBUFF -> defender.setAtk(defender.getAtk() - (defender.getAtk() / 100 * GREAT_ATK_DEBUFF.getValore()));
-            case BURNING -> defender.setHp(defender.getHp() - (defender.getMaxValues().getMaxHp() / 100 * BURNING.getValore()));
-            case BLEEDING -> defender.setHp(defender.getHp() - (defender.getMaxValues().getMaxHp() / 100 * BLEEDING.getValore()));
+            case POISON -> difensore.setHp(difensore.getHp() - (difensore.getMaxValues().getMaxHp() / 100 * POISON.getValore()));
+            case DEF_DEBUFF -> difensore.setDef(difensore.getDef() - (difensore.getDef() / 100 * DEF_DEBUFF.getValore()));
+            case GREAT_DEF_DEBUFF -> difensore.setDef(difensore.getDef() - (difensore.getDef() / 100 * GREAT_DEF_DEBUFF.getValore()));
+            case ATK_DEBUFF -> difensore.setAtk(difensore.getAtk() - (difensore.getAtk() / 100 * ATK_DEBUFF.getValore()));
+            case GREAT_ATK_DEBUFF -> difensore.setAtk(difensore.getAtk() - (difensore.getAtk() / 100 * GREAT_ATK_DEBUFF.getValore()));
+            case BURNING -> difensore.setHp(difensore.getHp() - (difensore.getMaxValues().getMaxHp() / 100 * BURNING.getValore()));
+            case BLEEDING -> difensore.setHp(difensore.getHp() - (difensore.getMaxValues().getMaxHp() / 100 * BLEEDING.getValore()));
             case OVERALL_DEBUFF -> {
-                defender.setDef(defender.getDef() - (defender.getDef() / 100 * OVERALL_DEBUFF.getValore()));
-                defender.setAtk(defender.getAtk() - (defender.getAtk() / 100 * OVERALL_DEBUFF.getValore()));
+                difensore.setDef(difensore.getDef() - (difensore.getDef() / 100 * OVERALL_DEBUFF.getValore()));
+                difensore.setAtk(difensore.getAtk() - (difensore.getAtk() / 100 * OVERALL_DEBUFF.getValore()));
             }
         }
 
@@ -145,24 +168,24 @@ public class CombatSystem {
      * The method uses helper methods like `applicaSkill` and `condizione` to perform the necessary stat modifications
      * and conditional checks, ensuring proper activation logic based on the parsed effect details.
      */
-    public void attivaSkills(List<Entita> nemici) {
+    public String attivaSkills(List<Entita> nemici) {
         //EXAMPLE: "ATTACCANTE DEFENSE + 10 WHEN ATTACCANTE HP < 40",
         //              0         1    2  3  4       5      6  7  8
         //for each skill in his passive
         if(attaccante.getPassiva() == null)
-            return;
+            return "";
         for(Skill skill : attaccante.getPassiva().getSkills()){
 
             if(skill.getEffect() == null || skill.getEffect().isEmpty() )
                 continue;
             String kit = skill.getEffect().toUpperCase();
             var parts = kit.split(" ");
-            if(!Objects.equals(parts[5], "ALWAYS")  && skill.isAttivo())
-                continue;
+
+
             //WHO GETS THE BUFF
             Entita target = switch (parts[0]){              //ATTACCANTE
                 case "ATTACCANTE", "ATTACKER", "PLAYER", "EROE" -> attaccante;
-                case "DIFENSORE", "DEFENDER", "NEMICO", "ENEMY" -> defender;
+                case "DIFENSORE", "DEFENDER", "NEMICO", "ENEMY" -> difensore;
                 default -> throw new IllegalStateException("Unexpected TARGET " + parts[0]);
             };
             String statToIncrease = parts[1];               // DEFENSE
@@ -171,20 +194,20 @@ public class CombatSystem {
             //ENTITA RESPONSIBLE FOR                        // WHEN
             Entita entCondizione = switch (parts[5]){       // ATTACCANTE
                 case "ATTACCANTE", "ATTACKER", "PLAYER", "EROE" -> attaccante;
-                case "DIFENSORE", "DEFENDER", "NEMICO", "ENEMY" -> defender;
+                case "DIFENSORE", "DEFENDER", "NEMICO", "ENEMY" -> difensore;
                 case "ALWAYS" -> attaccante;
                 default -> throw new IllegalStateException("Unexpected ENTITY CONDITION: " + parts[5]);
             };
             String nameCondition = "";
-            if(parts.length == 6 && skill.getTipoDiUtilizzo() == REPEAT) { // HP
-                applicaSkill(target, percentage, statToIncrease, sign, skill);
-                continue;
+            if(parts.length == 6 && skill.getTipoDiUtilizzo() == REPEAT) {
+                return applicaSkill(target, percentage, statToIncrease, sign, skill, false);
             }
             else if(parts.length == 6 && skill.getTipoDiUtilizzo() == ONE_TIME && !skill.isAttivo()){
-                applicaSkill(target, percentage, statToIncrease, sign, skill);
-                continue;
+                return applicaSkill(target, percentage, statToIncrease, sign, skill, false);
             }
-            else if(parts.length == 6 && skill.getTipoDiUtilizzo() == ONE_TIME)
+            else if(skill.isAttivo() && skill.getTipoDiUtilizzo() == ONE_TIME )
+                continue;
+            else if(statToIncrease.equals("HP") && skill.isAttivo())
                 continue;
 
             String sign2 = parts[7] ;                       // <
@@ -196,17 +219,18 @@ public class CombatSystem {
             }
 
             //controllo quale statistica o proprietà è da guardare
-            switch (parts[6]){
+            switch (parts[6]){                              // HP
                 case "NAME", "NOME" -> {
                     if(Objects.equals(entCondizione.getNome().toUpperCase(), nameCondition) && Objects.equals(parts[7], "IS"))
-                        applicaSkill(target, percentage, statToIncrease, sign, skill);
+                        return applicaSkill(target, percentage, statToIncrease, sign, skill, false);
                 }
-                case "HP", "VITA" -> condizione(entCondizione.getHp(), parts[6] , sign2, percentageToCheck, target, percentage, statToIncrease, sign, skill);
-                case "ATTACCO", "ATK", "ATTACK", "DAMAGE", "DANNO" -> condizione(entCondizione.getAtk(), parts[6], sign2, percentageToCheck, target, percentage, statToIncrease, sign, skill);
-                case "DIFESA", "DEF", "DEFENSE", "CORAZZA", "CORPO", "RESISTENZA" -> condizione(entCondizione.getDef(), parts[6],sign2, percentageToCheck, target, percentage, statToIncrease, sign, skill);
+                case "HP" -> {return condizione(entCondizione.getHp(), parts[6] , sign2, percentageToCheck, target,entCondizione, percentage, statToIncrease, sign, skill);}
+                case "ATTACCO", "ATK", "ATTACK", "DAMAGE", "DANNO" -> {return condizione(entCondizione.getAtk(), parts[6], sign2, percentageToCheck, target,entCondizione ,percentage, statToIncrease, sign, skill);}
+                case "DIFESA", "DEF", "DEFENSE", "CORAZZA", "CORPO", "RESISTENZA" -> {return condizione(entCondizione.getDef(), parts[6],sign2, percentageToCheck, target,entCondizione, percentage, statToIncrease, sign, skill);}
 
             }
         }
+        return "Controlla che le tue skill siano scritte correttamente " + attaccante.getNome();
     }
 
     /**
@@ -222,39 +246,82 @@ public class CombatSystem {
      * @param sign1 The operator indicating an increase or decrease in the target's stat ('+' or '-').
      */
     //condizione di attivazione
-    public void condizione(float statToCheck, String statToCheckString , String sign, float percentage, Entita target, float percentageIncrease, String statToIncrease, char sign1, Skill skill){
+    public String condizione(float statToCheck, String statToCheckString , String sign, float percentage, Entita target,Entita condTarget,  float percentageIncrease, String statToIncrease, char sign1, Skill skill){
 
         //converto da percentuale a valore in corrispondenza della statistica
         float convertedPercentage = switch (statToCheckString){
-            case "HP", "VITA" -> percentToFloat(target.getMaxValues().getMaxHp(), percentage);
-            case "ATTACCO", "ATK", "ATTACK", "DAMAGE", "DANNO" -> percentToFloat(target.getMaxValues().getMaxAtk(), percentage);
-            case "DIFESA", "DEF", "DEFENSE", "CORAZZA", "CORPO", "RESISTENZA" -> percentToFloat(target.getMaxValues().getMaxDef(), percentage);
+            case "HP" -> percentToFloat(condTarget.getMaxValues().getMaxHp(), percentage);
+            case "ATTACCO", "ATK", "ATTACK", "DAMAGE", "DANNO" -> percentToFloat(condTarget.getMaxValues().getMaxAtk(), percentage);
+            case "DIFESA", "DEF", "DEFENSE", "CORAZZA", "CORPO", "RESISTENZA" -> percentToFloat(condTarget.getMaxValues().getMaxDef(), percentage);
             default -> throw new IllegalStateException("Unexpected value: " + statToCheckString);
         };
-        System.out.println(convertedPercentage + "   CONVERTED PERCENTAGE\n");
         switch (sign){
             case "<", "MINORE" -> {
-                if(statToCheck < convertedPercentage) applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill);
+                System.out.println("MINORE");
+                if(statToCheck < convertedPercentage && skill.isAttivo())
+                    break;
+                else if(!(statToCheck < convertedPercentage) && skill.isAttivo()){
+                    skill.setAttivo(false);
+                    return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, true);
+                }
+                if(statToCheck < convertedPercentage) return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, false);
             }
             case ">", "MAGGIORE" -> {
-                if(statToCheck > convertedPercentage) applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill);
+                System.out.println("ENTITA : " + condTarget.getNome());
+                System.out.println("IEJWRJNFIENFERGNE " + statToCheck + " percentage "  +  convertedPercentage );
+                System.out.println("MAGGIORE");
+                if(statToCheck > convertedPercentage && skill.isAttivo())
+                    break;
+                else if(!(statToCheck > convertedPercentage) && skill.isAttivo()){
+                    skill.setAttivo(false);
+                    return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, true);
+                }
+                if(statToCheck > convertedPercentage) return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, false);
             }
             case "=", "UGUALE" -> {
-                if(statToCheck == convertedPercentage) applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill);
+                System.out.println("UGUALE");
+                if(statToCheck == convertedPercentage && skill.isAttivo())
+                    break;
+                else if(!(statToCheck == convertedPercentage) && skill.isAttivo()){
+                    skill.setAttivo(false);
+                    return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, true);
+                }
+                if(statToCheck == convertedPercentage) return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, false);
             }
             case ">=", "MAGGIORE_O_UGUALE" -> {
-                if(statToCheck >= convertedPercentage) applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill);
+                if(statToCheck >= convertedPercentage && skill.isAttivo())
+                    break;
+                else if(!(statToCheck >= convertedPercentage) && skill.isAttivo()){
+                    skill.setAttivo(false);
+                    return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, true);
+                }
+                if(statToCheck >= convertedPercentage) return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, false);
             }
             case "<=", "MINORE_O_UGUALE" -> {
-                if(statToCheck <= convertedPercentage) applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill);
+                if(statToCheck <= convertedPercentage && skill.isAttivo())
+                    break;
+                else if(!(statToCheck <= convertedPercentage) && skill.isAttivo()){
+                    skill.setAttivo(false);
+                    return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, true);
+                }
+                if(statToCheck <= convertedPercentage) return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, false);
             }
             case "!=", "DIVERSO" -> {
-                if(statToCheck != convertedPercentage) applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill);
+                if(statToCheck != convertedPercentage && skill.isAttivo())
+                    break;
+                else if(!(statToCheck != convertedPercentage) && skill.isAttivo()){
+                    skill.setAttivo(false);
+                    return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, true);
+                }
+                if(statToCheck != convertedPercentage) return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, false);
             }
-            case "ALWAYS", "SEMPRE", "SI" -> applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill);
+            case "ALWAYS", "SEMPRE", "SI" -> {
+                return applicaSkill(target,percentageIncrease, statToIncrease, sign1, skill, false);
+            }
 
             default -> log.error("Sign not found in condizione");
         }
+        return "";
     }
     /**
      * Applies a skill to a target entity by increasing or decreasing
@@ -267,30 +334,83 @@ public class CombatSystem {
      * @param sign           A character indicating the operation: '+' to increase, '-' to decrease.
      */
     //attivazione e incremento delle stats
-    public void applicaSkill(Entita target, float percentage, String statToIncrease, char sign, Skill skill){
+    public String applicaSkill(Entita target, float percentage, String statToIncrease, char sign, Skill skill, boolean disattivare){
         skill.setAttivo(true);
+        String valueDaStampare = "";
+        var maxHp = target.getMaxValues().getMaxHp();
+        var maxAtk = target.getMaxValues().getMaxAtk();
+        var maxDef = target.getMaxValues().getMaxDef();
+        if(skill.getTipoDiUtilizzo() == REPEAT && skill.isAttivo() && !disattivare){
+            maxHp = target.getHp();
+            maxAtk = target.getAtk();
+            maxDef = target.getDef();
+        }
         switch (statToIncrease){
             case "HP", "VITA"-> {
+                valueDaStampare = "✦Hp " + target.getHp() + " -> ";
                 switch (sign){
-                    case '+' -> target.setHp(target.getHp() + percentToFloat(target.getMaxValues().getMaxHp(), percentage));
-                    case '-' -> target.setHp(target.getHp() - percentToFloat(target.getMaxValues().getMaxHp(), percentage));
+                    case '+' -> {
+                        if(disattivare) {
+                            target.setHp(target.getHp() - percentToFloat(maxHp, percentage));
+                            skill.setAttivo(false);
+                        }
+                        else target.setHp(target.getHp() + percentToFloat(maxHp, percentage));
+                    }
+                    case '-' -> {
+                        if(disattivare) {
+                            target.setHp(target.getHp() + percentToFloat(maxHp, percentage));
+                            skill.setAttivo(false);
+                        }
+                        else target.setHp(target.getHp() - percentToFloat(maxHp, percentage));
+                    }
                 }
+                valueDaStampare += target.getHp();
             }
             case "ATTACCO", "ATK", "ATTACK", "DAMAGE", "DANNO" ->{
+                valueDaStampare = "✦Atk " + target.getAtk() + " -> ";
                 switch (sign){
-                case '+' -> target.setAtk(target.getAtk() + percentToFloat(target.getMaxValues().getMaxAtk(), percentage));
-                case '-' -> target.setAtk(target.getAtk() - percentToFloat(target.getMaxValues().getMaxAtk(), percentage));
+                    case '+' -> {
+                        if(disattivare) {
+                            target.setAtk(target.getAtk() - percentToFloat(maxAtk, percentage));
+                            skill.setAttivo(false);
+                        }
+                        else target.setAtk(target.getAtk() + percentToFloat(maxAtk, percentage));
+                    }
+                    case '-' -> {
+                        if(disattivare) {
+                            target.setAtk(target.getAtk() + percentToFloat(maxAtk, percentage));
+                            skill.setAttivo(false);
+                        }
+                        else target.setAtk(target.getAtk() - percentToFloat(maxAtk, percentage));
+                    }
                 }
+                valueDaStampare += target.getAtk();
             }
             case "DIFESA", "DEF", "DEFENSE", "CORAZZA", "CORPO", "RESISTENZA" ->{
+                valueDaStampare = "✦Def " + target.getDef() + " -> ";
                 switch (sign){
-                    case '+' -> target.setDef(target.getDef() + percentToFloat(target.getMaxValues().getMaxDef(), percentage));
-                    case '-' -> target.setDef(target.getDef() - percentToFloat(target.getMaxValues().getMaxDef(), percentage));
+                    case '+' -> {
+                        if(disattivare) {
+                            target.setDef(target.getDef() - percentToFloat(maxDef, percentage));
+                            skill.setAttivo(false);
+                        }
+                        else target.setDef(target.getDef() + percentToFloat(maxDef, percentage));
+                    }
+                    case '-' -> {
+                        if(disattivare) {
+                            target.setDef(target.getDef() + percentToFloat(maxDef, percentage)); // Ripristina
+                            skill.setAttivo(false);
+                        }
+                        else target.setDef(target.getDef() - percentToFloat(maxDef, percentage));
+                    }
                 }
+                valueDaStampare += target.getDef();
             }
         }
+        if(!disattivare)
+            return "☆" + attaccante.getNome() + " "+ valueDaStampare + "✦ skill: " + statToIncrease + " " + sign + " " + percentage  + " ATTIVA✅";
+        return "☆" + attaccante.getNome() + " " + valueDaStampare + "✦ skill: " + statToIncrease + " " + sign + " " + percentage  + " DISATTIVATA❌";
     }
-
 
     public float percentToFloat(float maxValue, float percentage){
         return maxValue * (percentage / 100);
